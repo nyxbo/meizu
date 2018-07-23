@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title></title>
+    <!-- <link rel="stylesheet" href="meizu.css" /> -->
+    <script src="https://p1.ifengimg.com/a/2018/meizu/jquery-3.2.1.min.js"></script>
+    <script src="https://p1.ifengimg.com/a/2018/meizu/vue.min.js"></script>
+</head>
+<body>
+<style>
+    body,div,h1,html,img,p,span{margin:0;padding:0;font-family:"Flyme Medius","Flyme Normal",Roboto}
+    .hide{display:none}
+    .myDiv{background-color:#ffffff}
+    .nightmode{background-color:#201f26}
+    .myDiv h1{color:#000;font-size:24px;font-family:Flyme Medius;text-align:justify;margin:0 20px 10px;padding-top:23px}
+    .nightmode h1{color:rgba(255,255,255,.5)}
+    .myDiv .source{margin:0 20px 27px;font-size:12px;font-family:Flyme Normal;text-align:justify;color:rgba(0,0,0,.4)}myDiv .source span{margin-right:10px}
+    .nightmode .source{color:rgba(255,255,255,.3)}
+    .myDiv .content,.myDiv .show_content{padding:0 16px 1px;}
+    .myDiv .content .image,.myDiv .show_content .image{width:100%;height:100%;margin:0 0 21px}
+    .myDiv .content .image img,.myDiv .show_content .image img{width:100%;height:100%}
+    .myDiv.nightmode .content .image,.myDiv.nightmode .show_content .image{opacity:.5}
+    .myDiv .content .noimage,.myDiv .show_content .noimage{position:relative;height:203px;background:#ededed}
+    .myDiv .content .noimage div,.myDiv .show_content .noimage div{font-weight:700;font-size:16px;font-family:Flyme Medius;color:#000;width:100%;height:100%;display:flex;justify-content:center;align-items:center}
+    .myDiv .content .noimage .hide,.myDiv .show_content .noimage .hide{display:none}
+    /*.nightmode .content .images,.nightmode .show_content .images{background:#37363c}*/
+    .myDiv.nightmode .content .noimage div,.myDiv.nightmode .show_content .noimage div{background:#37363c;}
+    .myDiv.nightmode .content div,.myDiv.nightmode .show_content div{color:rgba(255,255,255,.3)}
+    .myDiv .content div img,.myDiv .show_content div img{width:100%;margin-bottom:21px}
+    .myDiv .content p,.myDiv .show_content p{margin:0 4px 27px;text-align:justify;font-size:16px;font-family:Flyme Normal;line-height:26px;color:#000}
+    .myDiv .content p img,.myDiv .show_content p img{width:100%}
+    .myDiv.nightmode .content p,.myDiv.nightmode .show_content p{color:rgba(255,255,255,.5)}
+    .myDiv.nightmode .content img,.myDiv.nightmode .show_content img{opacity:.5}
+    .myDiv .check,.myDiv .check1{float:right;margin:0 20px 40px 0;color:rgba(0,0,0,.4);font-size:14px;font-family:Flyme Normal}
+    .myDiv .check1{display:none}
+
+</style>
+<div class="myDiv" v-cloak>
+    <div class="container container_height">
+        <h1 id="news_titleContent" v-if="con != null">${title}</h1>
+        <div class="source" id="news_article_info">
+            <span>${source}</span><span style="margin: 0 10px;">${updateTime}</span><span class="pageView" v-show="issuccess">浏览 ${pageView}</span>
+        </div>
+        <div v-if="types == 'slides'">
+            <!--正文-->
+            <div v-for="(item,index) in slides" class="show_content">
+                <div class="image images" v-if="!showImg" :class="{'noimage':!showImg}">
+                    <img src="" :data-url="item.image" alt="" style="display: none" >
+                    <div class="imgTip" @click="showImgs">点击加载图片</div>
+                </div>
+                <div class="image" v-else="showImg">
+                    <img :src="item.image" alt="">
+                </div>
+                <p>${item.description}</p>
+            </div>
+        </div>
+        <div v-if="types == 'doc'">
+            <!--正文-->
+            <div class="show_content doc_img" v-html="text"></div>
+        </div>
+    </div>
+</div>
+<script>
+    // 1 拿到aid 2. aid放到api
+    var aid = getHashQueryString('aid');
+    if(!aid){ // 无aid时
+//        window.location.href = 'https://share.iclient.ifeng.com/share_doc404?from=h5meizuh5&freshurl=' + location.href;
+        window.location.href = 'https://reader.res.meizu.com/reader/view/404.html?from=h5meizuh5&freshurl=' + location.href;
+    }
+    //aid=43536038
+    //aid=cmpp_034470054029484
+    var isURL = "https://api.iclient.ifeng.com/ipadtestdoc?aid=" + aid + "&gv=5.5.5&proid=ifengnewsh5&publishid=h5meizuh5&os=ios";
+
+    var doctitle = '';//文章标题
+    var imgUrl = [];
+    var isNight = getHashQueryString('nightmode') || false;
+    var cp = "78"; // 待定
+    var reg = window.location.href.match(/show-img=0/); //判断是否有图
+    var changesize = getHashQueryString('changesize'); //字体大小
+    var myDate = new Date();
+    var nowTime = myDate.getFullYear();
+//    console.log(myDate.getFullYear());
+
+
+
+    function getHashQueryString(key) { //获取URL参数
+        var hash = location.search;
+        var reg = new RegExp('[\?\&]' + key + '=([^\&]+)', 'i');
+        var result = hash.match(reg);
+        if (result == null || result.length < 1) {
+            return '';
+        }
+        return result[1];
+    }
+    //       onNetStateUpdate(2)
+    /* * 通知页面网络状态改变 *
+     * * netState: 1 无网络 2 蜂窝移动网络 3 WiFi
+     * */
+    function onNetStateUpdate(netState) {
+        // var url = window.location.href;
+        if(netState == 1 || netState == 2){
+            // if(!reg){
+            //     // url = url + "&show-img=0";
+            //     // window.location.href = url;
+            // }
+
+        }else if(netState == 3){
+            // if(reg){
+            //     // url = window.location.href.replace(/&show-img=0/,"");
+            //     // window.location.href = url;
+            // }
+            var item = $('.noimage');
+            // console.log($(item[0]).siblings("img"))
+            for(var i=0; i<item.length; i++){
+                var imageUrl = $(item[i]).siblings("img").attr("data-url");
+                var newUrl = "";
+                if(imageUrl.match("[\?]")) {
+                    newUrl= imageUrl + "&" + "force-show=1";
+                } else {
+                    newUrl= imageUrl + "?" + "force-show=1";
+                }
+                $(item[i]).siblings("img").attr("src",newUrl);
+                var geturl =  $(item[i]).siblings("img").attr("src");
+                var isurl = geturl.match(/force-show=1/);
+                if(isurl){
+                    $(item[i]).hide().siblings("img").show().parent(".image").removeClass("noimage").removeClass("nightNoimage");
+                }
+            }
+
+        }
+    }
+
+    /* * 更改文章字体大小； index: 0 :小; 1: 中; 2: 大; 3超大; */
+
+    function  changeTextSize(index){
+        var title_content = $("#news_titleContent");
+        var article_info = $("#news_article_info");
+        var content_text = $(".content p");
+        var show_content_text = $(".myDiv .show_content p");
+        var title_size = 24 + "px";
+        var article_info_size = 12 + "px";
+        var content_size = 16 + "px";
+        var content_line_height = 28 + "px";
+        var title_line_height = 25 + "px";
+        if (index == 0) { // 小
+            title_size = 20 + "px";
+            title_line_height = 21 + "px";
+            article_info_size = 8 + "px";
+            content_size = 12 + "px";
+            content_line_height = 22 + "px";
+        } else if (index == 2) { // 大
+            title_size = 30 + "px";
+            title_line_height = 31 + "px";
+            article_info_size = 16 + "px";
+            content_size = 20 + "px";
+            content_line_height = 32 + "px";
+        } else if (index == 3) { // 超大
+            title_size = 34 + "px";
+            title_line_height = 35 + "px";
+            article_info_size = 20 + "px";
+            content_size = 24 + "px";
+            content_line_height = 36 + "px";
+        } else { // 标准
+            title_size = 24 + "px";
+            title_line_height = 25 + "px";
+            article_info_size = 12 + "px";
+            content_size = 16 + "px";
+            content_line_height = 28 + "px";
+        }
+        title_content.css({"font-size":title_size,"line-height":title_line_height});
+        article_info.css("font-size",article_info_size);
+        content_text.css({"font-size":content_size,"line-height":content_line_height});
+        show_content_text.css({"font-size":content_size,"line-height":content_line_height});
+    }
+    //  night: 是否为夜间模式
+    function switchNightMode(night) {
+        // 请确认在切换夜间模式时，js代码中是否有switchNightMode方法以及是否被执行了
+        if(night){
+            $('.myDiv').addClass("nightmode");
+            // $(".container h1").addClass("nightH1");
+            // $(".source").addClass("nightSource");
+            // $(".images").addClass("nightNoimage");
+            // $(".show_content p").addClass("nightP");
+            // $(".content p").addClass("nightP");
+            // $(".content .image img").addClass("nightImg");
+            // $(".show_content .image img").addClass("nightImg");
+            // $("body").addClass("nightBody");
+            // $(".myDiv .container .show_content p").css("color","rgba(255,255,255,.5)");
+            // $(".show_content.doc_img p").css('color',"rgba(255,255,255,.5)");
+        }else{
+            $('.myDiv').removeClass("nightmode");
+            // $(".container h1").removeClass("nightH1");
+            // $(".source").removeClass("nightSource");
+            // $(".images").removeClass("nightNoimage");
+            // $(".show_content p").removeClass("nightP");
+            // $(".content p").removeClass("nightP");
+            // $(".content .image img").addClass("nightImg");
+            // $(".show_content .image img").addClass("nightImg");
+            // $("body").removeClass("nightBody");
+            // $(".myDiv .container .show_content p").css("color","#000");
+            // $(".show_content.doc_img p").css('color','#000');
+        }
+        js.setNightMode(cp, isNight);
+    }
+
+    var vm = new Vue({
+        el : ".myDiv",
+        delimiters: ['${', '}'],
+        data : {
+            con :{},
+            title: "",
+            source : "",
+            updateTime : "",
+            types : "",
+            text : "",
+            slides : "",
+            pageView : getHashQueryString("meizu_views") || 0, //浏览量
+            showImg : true,
+            issuccess: false
+        },
+        created : function () {
+//               var reg=window.location.href.match(/show-img=0/);
+            if(!reg){
+                this.showImg = true;
+                $(".show_content .image").removeClass("noimage");
+            }else {
+                this.showImg = false;
+                $(".show_content .image").addClass("noimage");
+            }
+            var regs=window.location.href.match(/nightmode=1/);
+            if(regs){
+                isNight = true;
+                switchNightMode(isNight);
+            }
+
+        },
+        mounted : function () {
+            this.getData();
+            // this.getPageView();
+        },
+        updated: function () {
+            this.copyrig();
+            changeTextSize(changesize);
+        },
+        methods : {
+            testNight:function () { //测试夜间模式，点击标题切换夜间模式
+                // switchNightMode(0)
+                onNetStateUpdate(3)
+            },
+            getData:function () {
+                $.ajax({
+                    dataType: "jsonp",
+                    url: isURL,
+                    success:function(res) {
+//                        console.log(res);
+                        if(res.length == 0 || res == null){
+                            window.location.href = 'https://reader.res.meizu.com/reader/view/404.html';
+                        }else {
+                            this.issuccess = true;
+                            doctitle = res.body.title;
+                            $('title').text(doctitle);
+
+                            // 文章更新时间显示
+                            var showDate = res.body.updateTime.split('/');
+                            var mm = showDate[1].match(/^\d{1}/);
+                            var dd = showDate[2].match(/^\d{1}/);
+
+                            if (showDate[0] == nowTime) {
+                                if (mm == 0) {
+                                    mm = showDate[1].replace(/^\d{1}/, '');
+                                    if (dd == 0) {
+                                        dd = showDate[2].replace(/^\d{1}/, '');
+                                        this.updateTime = mm + '/' + dd;
+                                    } else {
+                                        this.updateTime = mm + "/" + showDate[2];
+                                    }
+                                } else {
+                                    if (dd == 0) {
+                                        dd = showDate[2].replace(/^\d{1}/, '');
+                                        this.updateTime = showDate[1] + "/" + dd;
+                                    } else {
+                                        this.updateTime = showDate[1] + "/" + showDate[2];
+                                    }
+                                }
+                            } else if (showDate[0] < nowTime) {
+                                if (mm == 0) {
+                                    mm = showDate[1].replace(/^\d{1}/, '');
+                                    if (dd == 0) {
+                                        dd = showDate[2].replace(/^\d{1}/, '');
+                                        this.updateTime = showDate[0] + "/" + mm + '/' + dd;
+                                    } else {
+                                        this.updateTime = showDate[0] + "/" + mm + "/" + showDate[2];
+                                    }
+                                } else {
+                                    if (dd == 0) {
+                                        dd = showDate[2].replace(/^\d{1}/, '');
+                                        this.updateTime = showDate[0] + "/" + showDate[1] + "/" + dd;
+                                    } else {
+                                        this.updateTime = showDate[0] + "/" + showDate[1] + "/" + showDate[2];
+                                    }
+                                }
+                            }
+
+                            if (res.meta.type == "slides") {
+                                this.con = res;
+                                this.title = res.body.title;
+                                this.source = res.body.source;
+                                //                            this.updateTime = res.body.updateTime;
+                                this.types = res.meta.type;
+                                this.slides = res.body.slides;
+                                this.getWandSlides();
+                            } else if (res.meta.type == "doc") {
+                                if (reg) {
+                                    var newimg = res.body.text.replace(/<img /g, '<img style="display: none" ');
+                                    if (!isNight) {
+                                        newimg = newimg.replace(/><img/g, "><div><div class='image images noimage'><div class='imgTip'>点击加载图片</div></div><img");
+                                    } else {
+                                        newimg = newimg.replace(/><img/g, "><div><div class='image images noimage nightNoimage'><div class='imgTip'>点击加载图片</div></div><img");
+                                    }
+                                    newimg = newimg.replace(/"><\/p>/g, '"></div></p>');
+                                    var data = newimg.replace(/src/g, 'data-url');
+                                    data = data.replace(/<img /g, '<img src="" ');
+                                    data = data.replace(/style/g,'data-style');
+                                    this.con = res;
+                                    this.title = res.body.title;
+                                    this.source = res.body.source;
+                                    //                                this.updateTime = res.body.updateTime;
+                                    this.types = res.meta.type;
+                                    this.text = data;
+                                    this.con.body.text = data;
+                                } else {
+                                    var data = res.body.text.replace(/style/g, 'data-style');
+                                    this.con = res;
+                                    this.title = res.body.title;
+                                    this.source = res.body.source;
+                                    //                                this.updateTime = res.body.updateTime;
+                                    this.types = res.meta.type;
+//                                    this.text = res.body.text;
+                                    this.text = data;
+                                }
+
+                                this.getWandDoc();
+                            }
+                        }
+                    }.bind(this)
+                })
+            },
+            copyrig:function () { // 查看原文 ? 没用？
+//                   changeTextSize(3);
+                if(this.con.meta.type == "doc"){
+                    $(".imgTip").click(function () {
+                        var a=$(this).parent(".noimage").siblings("img").attr("data-url");
+                        var urlnew = "";
+                        if(a.match("[\?]")) {
+                            urlnew= a + "&" + "force-show=1";
+                        } else {
+                            urlnew= a + "?" + "force-show=1";
+                        }
+                        $(this).parent(".noimage").siblings("img").attr("src",urlnew);
+                        var current = $(this).parent(".noimage").siblings("img").attr("src");
+                        var hasurl = current.match(/force-show=1/);
+                        if(hasurl){
+                            $(this).parent(".noimage").hide().siblings("img").show();
+                        }
+                    })
+//
+                }
+                // ？为什么
+                // if(isNight){
+                //     $(".myDiv .container .show_content p").addClass("nightP");
+                //     $(".myDiv .container .show_content div img").css("opacity",".5");
+                // }else{
+                //     $(".myDiv .container .show_content p").removeClass("nightP");
+                // }
+                this.docClick();//获取当前图片信息
+            },
+            showImgs:function (event) { //slides无图模式，点击加载图片
+                var item=event.target;
+                var imageUrl = $(item).siblings("img").attr("data-url");
+                var newUrl = "";
+                if(imageUrl.match("[\?]")) {
+                    newUrl= imageUrl + "&" + "force-show=1";
+                } else {
+                    newUrl= imageUrl + "?" + "force-show=1";
+                }
+                $(item).siblings("img").attr("src",newUrl);
+                var geturl =  $(item).siblings("img").attr("src");
+                var isurl = geturl.match(/force-show=1/);
+                if(isurl){
+                    $(item).hide().siblings("img").show().parent(".image").removeClass("noimage").removeClass("nightNoimage");
+                }
+            },
+            docClick:function (){ // 图片全屏展示
+                /**  * cp：新引入的CP值待定(具体值由魅族资讯后续同步)
+                 *   * index：当前点击的是第几张图片，值为0~Max-1
+                 *   * imgUrl：当前文章所有图片的信息(注意是所有图片)  */
+                var a = $(".show_content img");
+                for(var i=0;i<a.length;i++){
+                    (function(i){
+                        a[i].onclick = function () {
+                            console.log({"cp":cp,"index":i,"imgUrl":JSON.stringify(imgUrl)});
+                            //return ({"cp":cp,"index":i,"imgUrl":imgUrl});
+                            js.clickImage(cp, i, JSON.stringify(imgUrl));
+                        }
+                    })(i);
+                }
+            },
+            getWandSlides:function(){ // type == slides
+                var slides = this.con.body.slides.length;
+                for(var i=0;i<slides;i++){
+                    var slide = this.con.body.slides[i];
+                    var index_a = slide.image.search(/_w/i);
+                    var index_b = slide.image.search(/_h/i);
+                    var w = slide.image.slice(index_a+2,index_b);
+                    var h = slide.image.slice(index_b+2).split(".")[0];
+                    var type = slide.image.slice(index_b+2).split(".")[1];
+                    imgUrl.push({"width":parseInt(w),"height":parseInt(h),"type":type,"index":i,"title":this.con.body.title,"url":slide.image});
+                }
+            },
+            getWandDoc:function () { // type == doc
+                var images = this.con.body.img.length;
+                for(var i=0;i<images;i++){
+                    var image = this.con.body.img[i];
+                    var indexUrl = image.url;
+                    var indexW = image.size.width;
+                    var indexH = image.size.height;
+                    var index_b = image.url.search(/_h/i);
+                    var type = image.url.slice(index_b+2).split(".")[1];
+                    imgUrl.push({"url":indexUrl,"width":parseInt(indexW),"height":parseInt(indexH),"type":type,"title":this.con.body.title,"index":i});
+                }
+            }
+        }
+    })
+</script>
+<script type="text/javascript">
+    ;(function() {
+        var ga = document.createElement('script'), s;
+        ga.type = 'text/javascript';
+        ga.src = ('https:' == document.location.protocol ? 'https://tongjires.meizu.com' : 'http://tongji-res1.meizu.com') + '/resources/tongji/flow.js';
+        s = document.getElementsByTagName('script')[0];
+        s.parentNode.insertBefore(ga, s);
+    })();
+</script>
+</body>
+</html>
+​
